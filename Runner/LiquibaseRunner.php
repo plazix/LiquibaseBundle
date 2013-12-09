@@ -6,13 +6,16 @@ use Doctrine\Bundle\DoctrineBundle\Registry;
 
 use Symfony\Component\FileSystem\Filesystem;
 use Symfony\Component\Process\Process;
+use Symfony\Component\HttpKernel\KernelInterface;
+use Symfony\Component\HttpKernel\Bundle\BundleInterface;
 
 class LiquibaseRunner
 {
     private $filesystem;
     private $dbConnections;
+    private $projectDir;
 
-    public function __construct(Filesystem $filesystem, Registry $doctrine)
+    public function __construct(KernelInterface $kernel, Filesystem $filesystem, Registry $doctrine)
     {
         $this->filesystem = $filesystem;
 
@@ -20,16 +23,24 @@ class LiquibaseRunner
             /** @var $connection \Doctrine\DBAL\Connection */
             $this->dbConnections[$connectionName] = $connection->getParams();
         }
+
+        $this->projectDir = realpath($kernel->getRootDir() . '/../');
     }
 
-    public function runAppUpdate(\Symfony\Component\HttpKernel\KernelInterface $kernel)
+    public function runAppUpdate()
     {
-        $this->runUpdate($kernel->getRootDir().'/Resources/liquibase/changelog-{connection_name}.xml');
+        $this->runUpdate('app/Resources/liquibase/changelog-{connection_name}.xml');
     }
 
-    public function runBundleUpdate(\Symfony\Component\HttpKernel\Bundle\BundleInterface $bundle)
+    public function runBundleUpdate(BundleInterface $bundle)
     {
-        $this->runUpdate($bundle->getPath().'/Resources/liquibase/changelog-{connection_name}.xml');
+        $changelogFile = str_replace(
+            $this->projectDir,
+            '',
+            $bundle->getPath() . '/Resources/liquibase/changelog-{connection_name}.xml'
+        );
+
+        $this->runUpdate($changelogFile);
     }
 
     private function runUpdate($changelogFile)
@@ -58,6 +69,8 @@ class LiquibaseRunner
 
     protected function run($command)
     {
+        $command = 'cd ' . $this->projectDir . ' && ' . $command;
+
         $output = "";
         exec($command, $output);
 

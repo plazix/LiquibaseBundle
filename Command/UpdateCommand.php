@@ -25,6 +25,7 @@ class UpdateCommand extends ContainerAwareCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $runner = new LiquibaseRunner(
+            $this->getContainer()->get('kernel'),
             $this->getContainer()->get('filesystem'),
             $this->getContainer()->get('doctrine')
         );
@@ -35,7 +36,7 @@ class UpdateCommand extends ContainerAwareCommand
             $runner->runBundleUpdate($kernel->getBundle($bundle));
         }
         else {
-            $runner->runAppUpdate($kernel);
+            $runner->runAppUpdate();
         }
     }
 }
