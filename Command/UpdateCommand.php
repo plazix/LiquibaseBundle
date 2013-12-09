@@ -25,8 +25,9 @@ class UpdateCommand extends ContainerAwareCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $runner = new LiquibaseRunner(
-                        $this->getContainer()->get('filesystem'),
-                        $this->getContainer()->get('doctrine.dbal.default_connection'));
+            $this->getContainer()->get('filesystem'),
+            $this->getContainer()->get('doctrine')
+        );
 
         $bundle = $input->getArgument('bundle');
         $kernel = $this->getContainer()->get('kernel');
