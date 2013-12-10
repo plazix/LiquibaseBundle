@@ -1,42 +1,41 @@
 <?php
 namespace RtxLabs\LiquibaseBundle\Command;
 
-use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use RtxLabs\LiquibaseBundle\Generator\ChangelogGenerator;
-use RtxLabs\LiquibaseBundle\Runner\LiquibaseRunner;
 
-class UpdateCommand extends ContainerAwareCommand
+class UpdateCommand extends AbstractCommand
 {
+    /**
+     * {@inheritdoc}
+     */
     protected function configure()
     {
+        parent::configure();
+
         $this
             ->setName('liquibase:update:run')
-            ->setDescription('Generating a Liquibase changelog file skeleton')
-            ->addArgument('bundle', InputArgument::OPTIONAL,
-                          'The name of the bundle (shortcut notation AcmeDemoBundle) for that the changlogs should run or all bundles if no one is given')
-            ->addOption('dry-run', 'd', InputOption::VALUE_NONE, 'outputs the SQL-Statements that would run')
-        ;
+            ->setDescription('Updates database to current version');
     }
 
+    /**
+     * {@inheritdoc}
+     */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $runner = new LiquibaseRunner(
-            $this->getContainer()->get('kernel'),
-            $this->getContainer()->get('filesystem'),
-            $this->getContainer()->get('doctrine')
-        );
+        parent::execute($input, $output);
 
-        $bundle = $input->getArgument('bundle');
-        $kernel = $this->getContainer()->get('kernel');
-        if (strlen($bundle) > 0) {
-            $runner->runBundleUpdate($kernel->getBundle($bundle));
-        }
-        else {
-            $runner->runAppUpdate();
+        $changeSetLogs = $this->findChangeSetLogs($this->bundleName, $this->connectionName);
+        if (empty($changeSetLogs)) {
+            $output->writeln('Not found changeset files');
+        } else {
+            foreach ($changeSetLogs as $connectionName => $changeSetFilename) {
+                $output->writeln('Process ' . $changeSetFilename . ' for ' . $connectionName . ' connection.');
+
+                $this->runner->runUpdate($changeSetFilename, $connectionName);
+            }
         }
     }
 }

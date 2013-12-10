@@ -11,71 +11,96 @@ use Symfony\Component\HttpKernel\Bundle\BundleInterface;
 
 class LiquibaseRunner
 {
+    /** @var \Symfony\Component\FileSystem\Filesystem */
     private $filesystem;
+
+    /** @var array */
     private $dbConnections;
-    private $projectDir;
+
+    /** @var string */
+    private $projectRootDir;
 
     public function __construct(KernelInterface $kernel, Filesystem $filesystem, Registry $doctrine)
     {
         $this->filesystem = $filesystem;
+        $this->projectRootDir = realpath($kernel->getRootDir() . '/../');
 
         foreach ($doctrine->getConnections() as $connectionName => $connection) {
             /** @var $connection \Doctrine\DBAL\Connection */
             $this->dbConnections[$connectionName] = $connection->getParams();
         }
-
-        $this->projectDir = realpath($kernel->getRootDir() . '/../');
     }
 
-    public function runAppUpdate()
+    //--- liquibase command
+
+    public function runUpdate($changeLogFile, $connectionName = 'default')
     {
-        $this->runUpdate('app/Resources/liquibase/changelog-{connection_name}.xml');
+        $command = $this->getBaseCommand($this->dbConnections[$connectionName]);
+        $command .= ' --changeLogFile=' . $changeLogFile;
+        $command .= ' update';
+
+        print $command;
+
+        $this->run($command);
     }
 
-    public function runBundleUpdate(BundleInterface $bundle)
+    public function runRollback($changeLogFile, $tagName, $connectionName = 'default')
     {
-        $changelogFile = str_replace(
-            $this->projectDir,
-            '',
-            $bundle->getPath() . '/Resources/liquibase/changelog-{connection_name}.xml'
-        );
+        $command = $this->getBaseCommand($this->dbConnections[$connectionName]);
+        $command .= ' --changeLogFile=' . $changeLogFile;
+        $command .= ' rollback ' . $tagName;
 
-        $this->runUpdate($changelogFile);
+        print $command;
+
+        $this->run($command);
     }
 
-    private function runUpdate($changelogFile)
+    public function runDiff($connectionName = 'default')
     {
-        foreach ($this->dbConnections as $connectionName => $connectionParams) {
-            $changelogFileConn = str_replace('{connection_name}', $connectionName, $changelogFile);
-            if (is_file($changelogFileConn)) {
-                $command = $this->getBaseCommand($connectionParams);
-                $command .= ' --changeLogFile=' . $changelogFileConn;
-                $command .= " update";
-
-                $this->run($command);
-            }
-        }
+        //
     }
 
-    public function runRollback($bundle)
+    public function runTag($tagName, $connectionName = 'default')
     {
+        $command = $this->getBaseCommand($this->dbConnections[$connectionName]);
+        $command .= ' tag ' . $tagName;
 
+        print $command;
+
+        $this->run($command);
     }
 
-    public function runDiff($bundle)
+    public function runStatus()
     {
-
+        //
     }
+
+    //--- helper methods
 
     protected function run($command)
     {
-        $command = 'cd ' . $this->projectDir . ' && ' . $command;
+        $process = proc_open(
+            $command,
+            array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w')),
+            $pipes,
+            $this->projectRootDir
+        );
+        if (is_resource($process)) {
+            $log = stream_get_contents($pipes[1]);
 
-        $output = "";
-        exec($command, $output);
+            $errorLog = stream_get_contents($pipes[2]);
+            if (!empty($errorLog)) {
+                print $errorLog;
+            }
 
-        echo $command."\n";
-        print_r($output);
+            fclose($pipes[0]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+
+            return 0 == proc_close($process);
+        }
+
+        return false;
     }
 
     protected function getBaseCommand($connectionParams)
@@ -102,10 +127,10 @@ class LiquibaseRunner
         switch($dbalDriver) {
             case 'pdo_mysql':
             case 'mysql':
-                $driver = "com.mysql.jdbc.Driver";
+                $driver = 'com.mysql.jdbc.Driver';
                 break;
             default:
-                throw new \RuntimeException("No JDBC-Driver found for $dbalDriver");
+                throw new \RuntimeException('No JDBC-Driver found for ' . $dbalDriver);
         }
 
         return $driver;
@@ -118,10 +143,10 @@ class LiquibaseRunner
         switch($dbalDriver) {
             case 'pdo_mysql':
             case 'mysql':
-                $dir .= "mysql-connector-java-5.1.18-bin.jar";
+                $dir .= 'mysql-connector-java-5.1.18-bin.jar';
                 break;
             default:
-                throw new \RuntimeException("No JDBC-Driver found for $dbalDriver");
+                throw new \RuntimeException('No JDBC-Driver found for ' . $dbalDriver);
         }
 
         return $dir;
@@ -131,16 +156,17 @@ class LiquibaseRunner
     {
         switch ($dbalParams['driver']) {
             case 'pdo_mysql':
+            case 'mysql':
                 return $this->getMysqlJdbcDsn($dbalParams);
                 break;
             default:
-                throw new \RuntimeException("Database not supported");
+                throw new \RuntimeException('Database not supported');
         }
     }
 
     protected function getMysqlJdbcDsn($dbalParams)
     {
-        $dsn = "jdbc:mysql://";
+        $dsn = 'jdbc:mysql://';
         if ($dbalParams['host'] != "") {
             $dsn .= $dbalParams['host'];
         }
@@ -152,7 +178,7 @@ class LiquibaseRunner
             $dsn .= ":" . $dbalParams['port'];
         }
 
-        $dsn .= "/" . $dbalParams['dbname'] . '?useUnicode=true&characterEncoding=utf-8';
+        $dsn .= '/' . $dbalParams['dbname'];
         if ('utf8' == strtolower($dbalParams['charset'])) {
             $dsn .= '?useUnicode=true&characterEncoding=utf-8';
         }
