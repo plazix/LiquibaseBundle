@@ -81,7 +81,7 @@ abstract class AbstractCommand extends ContainerAwareCommand
         $projectRootDir = realpath($kernel->getRootDir() . '/../');
 
         if (empty($bundleName)) {
-            $changeSetLogFilename = 'app/Resources/liquibase/changelog-{connection_name}.xml' ;
+            $changeSetLogFilename = 'app/Resources/liquibase/changelog-{connection_name}-{env}.xml' ;
         } else {
 
             /** @var \Symfony\Component\HttpKernel\Bundle\BundleInterface $bundle */
@@ -90,14 +90,18 @@ abstract class AbstractCommand extends ContainerAwareCommand
             $changeSetLogFilename = $changelogFile = str_replace(
                 $projectRootDir,
                 '',
-                $bundle->getPath() . '/Resources/liquibase/changelog-{connection_name}.xml'
+                $bundle->getPath() . '/Resources/liquibase/changelog-{connection_name}-{env}.xml'
             );
         }
 
         $changeSetLogs = array();
         if (empty($connectionName)) {
             foreach ($this->dbConnections as $connectionName) {
-                $filename = str_replace('{connection_name}', $connectionName, $changeSetLogFilename);
+                $filename = str_replace(
+                    array('{connection_name}', '{env}'),
+                    array($connectionName, $kernel->getEnvironment()),
+                    $changeSetLogFilename
+                );
                 if (is_file($projectRootDir . '/' . $filename)) {
                     $changeSetLogs[$connectionName] = $filename;
                 }
