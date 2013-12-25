@@ -82,5 +82,5 @@ TODO
 ============
 
 * Write a decent documentation
-* Add a rollback commandline task
 * Add unit tests
+* Update a generate commandline task
